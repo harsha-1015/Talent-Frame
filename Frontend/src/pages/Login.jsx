@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "../services/firebase";
 import api from "../services/api";
@@ -6,6 +7,7 @@ import { motion } from "framer-motion";
 import { Film, Clapperboard, Loader2 } from "lucide-react";
 
 const Login = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -32,8 +34,12 @@ const Login = () => {
       const res = await api.post("/register/", payload);
       console.log("Backend response:", res.data);
 
-      alert("Login successful!");
-      // navigate("/dashboard");
+      // Check if profile is complete and redirect accordingly
+      if (res.data.user && res.data.user.is_profile_complete) {
+        navigate("/");  // Redirect to home if profile is complete
+      } else {
+        navigate("/profile");  // Redirect to profile if incomplete
+      }
     } catch (err) {
       console.error("Login error:", err);
       setError(err.response?.data?.error || err.message);
