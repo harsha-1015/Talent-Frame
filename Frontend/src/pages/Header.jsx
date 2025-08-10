@@ -1,11 +1,25 @@
-import { Link, useLocation } from 'react-router-dom';
-import { Home, User, Heart, Clapperboard, Users, X, Menu } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Home, User, Heart, Clapperboard, Users, X, Menu, LogIn } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { auth } from '../services/firebase';
+import { signOut } from 'firebase/auth';
 
 const Header = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { currentUser } = useAuth();
+  
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate('/login');
+    } catch (error) {
+      console.error('Failed to log out', error);
+    }
+  };
   
   const navItems = [
     {
@@ -16,24 +30,30 @@ const Header = () => {
     {
       path: "/character",
       name: "Character",
-      icon: <User className="w-5 h-5" />
+      icon: <User className="w-5 h-5" />,
+      authRequired: true
     },
     {
       path: "/match",
       name: "Match",
-      icon: <Heart className="w-5 h-5" />
+      icon: <Heart className="w-5 h-5" />,
+      authRequired: true
     },
     {
       path: "/connections",
       name: "Connections",
-      icon: <Users className="w-5 h-5" />
+      icon: <Users className="w-5 h-5" />,
+      authRequired: true
     },
     {
-      path: "/profile",
-      name: "Profile",
-      icon: <Clapperboard className="w-5 h-5" />
+      path: currentUser ? "/profile" : "/login",
+      name: currentUser ? "Profile" : "Login",
+      icon: currentUser ? <Clapperboard className="w-5 h-5" /> : <LogIn className="w-5 h-5" />
     }
   ];
+
+  // Filter nav items based on authentication
+  const filteredNavItems = navItems.filter(item => !item.authRequired || currentUser);
 
   return (
     <header className="bg-gray-900 border-b border-gray-800 fixed w-full z-50">
@@ -56,7 +76,7 @@ const Header = () => {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex space-x-6">
-            {navItems.map((item) => (
+            {filteredNavItems.map((item) => (
               <Link
                 key={item.path}
                 to={item.path}
@@ -83,6 +103,14 @@ const Header = () => {
                 </div>
               </Link>
             ))}
+            {currentUser && (
+              <button
+                onClick={handleLogout}
+                className="px-3 py-2 text-sm font-medium text-gray-400 hover:text-amber-300 transition-colors duration-300"
+              >
+                Logout
+              </button>
+            )}
           </nav>
 
           {/* Mobile menu button */}
@@ -101,38 +129,45 @@ const Header = () => {
         </div>
       </div>
 
-      {/* Mobile Navigation */}
+      {/* Mobile menu */}
       <AnimatePresence>
         {mobileMenuOpen && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3 }}
-            className="md:hidden overflow-hidden"
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.2 }}
+            className="md:hidden bg-gray-900 border-t border-gray-800"
           >
-            <div className="px-2 pt-2 pb-3 space-y-1 bg-gray-900 border-t border-gray-800">
-              {navItems.map((item) => (
+            <div className="px-2 pt-2 pb-3 space-y-1">
+              {filteredNavItems.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
                   className={`block px-3 py-2 rounded-md text-base font-medium ${
                     location.pathname === item.path
-                      ? 'bg-amber-400/10 text-amber-400'
-                      : 'text-gray-400 hover:bg-amber-400/10 hover:text-amber-300'
+                      ? 'bg-gray-800 text-amber-400'
+                      : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                   }`}
                   onClick={() => setMobileMenuOpen(false)}
                 >
-                  <div className="flex items-center space-x-3">
-                    <div className={`${
-                      location.pathname === item.path ? 'text-amber-400' : 'text-gray-400'
-                    }`}>
-                      {item.icon}
-                    </div>
+                  <div className="flex items-center space-x-2">
+                    {item.icon}
                     <span>{item.name}</span>
                   </div>
                 </Link>
               ))}
+              {currentUser && (
+                <button
+                  onClick={() => {
+                    handleLogout();
+                    setMobileMenuOpen(false);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-gray-800 hover:text-white"
+                >
+                  Logout
+                </button>
+              )}
             </div>
           </motion.div>
         )}

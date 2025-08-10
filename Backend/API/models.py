@@ -11,6 +11,7 @@ class User(models.Model):
         ('filmmaker', 'Filmmaker'),
     )
     user_type = models.CharField(max_length=20, choices=USER_TYPE_CHOICES)
+    is_profile_complete = models.BooleanField(default=False, null=True)
 
     def __str__(self):
         return f"{self.username} ({self.user_type})"
