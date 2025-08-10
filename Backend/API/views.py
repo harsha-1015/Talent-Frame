@@ -70,10 +70,10 @@ def register_user(request):
             # Create the appropriate profile if it doesn't exist
             if user_type == 'actor' and not hasattr(user, 'actorprofile'):
                 profile = ActorProfile.objects.create(user=user)
-                logger.info(f"Actor profile created: {profile.id}")
+                logger.info(f"Actor profile created with ID: {profile.actor_id}")
             elif user_type == 'filmmaker' and not hasattr(user, 'filmmakerprofile'):
                 profile = FilmmakerProfile.objects.create(user=user)
-                logger.info(f"Filmmaker profile created: {profile.id}")
+                logger.info(f"Filmmaker profile created with ID: {profile.filmmaker_profile_id}")
             
             return JsonResponse({
                 'message': 'User processed successfully',
