@@ -1,34 +1,88 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useContext } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { User, Mail, MapPin, Edit, Film, Trash2, Settings, Bell, Lock, Users as Connections, Save } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { AuthContext } from '../contexts/AuthContext';
+import api from '../services/api';
 
 const Profile = () => {
+  const { currentUser, setCurrentUser } = useContext(AuthContext);
+  const navigate = useNavigate();
   const [editMode, setEditMode] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [profile, setProfile] = useState({
-    name: "Alex Director",
-    email: "alex.director@example.com",
-    bio: "Award-winning film director with 10+ years of experience in feature films and commercials.",
-    location: "Los Angeles, CA",
-    skills: ["Directing", "Screenwriting", "Casting"],
-    profileImage: "https://randomuser.me/api/portraits/men/32.jpg",
-    reel: "https://example.com/reels/director-reel.mp4",
-    reelDescription: "My latest director's reel showcasing recent feature film work",
-    connections: [
-      { id: 1, name: "Sophie Chen", avatar: "https://randomuser.me/api/portraits/women/44.jpg", status: "Producer" },
-      { id: 2, name: "James Okafor", avatar: "https://randomuser.me/api/portraits/men/75.jpg", status: "Cinematographer" },
-      { id: 3, name: "Maya Patel", avatar: "https://randomuser.me/api/portraits/women/68.jpg", status: "Editor" },
-      { id: 4, name: "Ethan Zhang", avatar: "https://randomuser.me/api/portraits/men/81.jpg", status: "Production Designer" },
-      { id: 5, name: "Isabella Morales", avatar: "https://randomuser.me/api/portraits/women/92.jpg", status: "Casting Director" }
-    ],
+    name: "",
+    email: "",
+    bio: "",
+    location: "",
+    skills: [],
+    profileImage: "",
+    reel: "",
+    reelDescription: "",
+    connections: [],
     privacy: {
       profileVisibility: "public",
       reelVisibility: "connections",
       notifications: true
     }
   });
-
   const [newConnectionSearch, setNewConnectionSearch] = useState("");
+
+  // Load user data on component mount
+  useEffect(() => {
+    if (currentUser) {
+      // Set initial form data from currentUser
+      setProfile(prev => ({
+        ...prev,
+        name: currentUser.displayName || "",
+        email: currentUser.email || "",
+        bio: currentUser.bio || "",
+        location: currentUser.location || "",
+        skills: currentUser.skills || [],
+        profileImage: currentUser.photoURL || ""
+      }));
+      
+      // Set edit mode to true if profile is not complete
+      if (!currentUser.is_profile_complete) {
+        setEditMode(true);
+      }
+    }
+  }, [currentUser]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!isProfileComplete()) {
+      setError("Please fill in all required fields");
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      // Update the user's profile
+      const response = await api.put(`/user/${currentUser.uid}/`, {
+        ...profile,
+        is_profile_complete: true  // Mark as complete when submitting the form
+      });
+      
+      // Update the current user in context
+      setCurrentUser(prev => ({
+        ...prev,
+        ...response.data.user,
+        is_profile_complete: true
+      }));
+      
+      // Redirect to home page after successful update
+      navigate('/');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      setError('Failed to update profile. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -69,10 +123,55 @@ const Profile = () => {
     }));
   };
 
-  const saveChanges = () => {
-    setEditMode(false);
-    // In a real app, this would save to backend
-    console.log("Profile saved:", profile);
+  // Check if profile is complete
+  const isProfileComplete = () => {
+    const requiredFields = [profile.name, profile.bio, profile.location];
+    return requiredFields.every(field => field && field.trim() !== '');
+  };
+
+  const saveChanges = async () => {
+    if (!isProfileComplete()) {
+      setError("Please fill in all required fields");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Prepare the profile data to send
+      const profileData = {
+        username: profile.name,
+        email: profile.email,
+        bio: profile.bio,
+        location: profile.location,
+        skills: profile.skills,
+        is_profile_complete: true
+      };
+
+      // Update the user's profile in the backend
+      const response = await api.put(`/profile/${currentUser.uid}/`, profileData);
+
+      // Update the current user in context
+      setCurrentUser(prev => ({
+        ...prev,
+        ...response.data.user,
+        displayName: profile.name,
+        photoURL: profile.profileImage,
+        is_profile_complete: true
+      }));
+
+      // Show success message
+      alert('Profile updated successfully!');
+      
+      // Redirect to home page after successful update
+      navigate('/');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      setError(error.response?.data?.error || 'Failed to update profile. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
