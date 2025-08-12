@@ -5,5 +5,5 @@ from . import views
 urlpatterns = [
     path('register/', views.register_user, name='register_user'),  # This will be /api/register/
     path('user/<str:uid>/', views.get_user_by_uid, name='get_user_by_uid'),  # This will be /api/user/<uid>/
-    path('profile/<str:uid>/', views.update_profile, name='update_profile'),  # This will be /api/profile/<uid>/
+    path('users/profile/<str:uid>/', views.handle_profile, name='handle_profile'),  # This will be /api/users/profile/<uid>/
 ]
