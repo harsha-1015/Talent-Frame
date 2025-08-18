@@ -278,12 +278,23 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 # -------------------------------
 # CORS
 # -------------------------------
+
+MIDDLEWARE.insert(0, "corsheaders.middleware.CorsMiddleware")
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",   # React dev server
+    "http://localhost:3000",   # React dev
+    "http://127.0.0.1:3000",
+    "http://localhost:5173",   # Vite dev
+    "http://127.0.0.1:5173",
+    "https://talent-frame.vercel.app",  # React dev server
 ]
 
-CORS_ALLOW_CREDENTIALS = True
-
+# CORS_ALLOW_CREDENTIALS = True
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "https://talent-frame.onrender.com",
+    "https://talent-frame.vercel.app",
+]
 # -------------------------------
 # Default primary key field type
 # -------------------------------
