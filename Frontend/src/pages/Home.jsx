@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Search, Users, Film, Star, Clapperboard, Camera, Sparkles } from 'lucide-react';
+import preview from "../assets/preview.png";
 
 const Home = () => {
   const features = [
@@ -195,15 +196,17 @@ const Home = () => {
               viewport={{ once: true }}
               className="lg:w-1/2 relative"
             >
-              {/* Mock 3D character builder */}
+              {/* 3D character builder with preview image */}
               <div className="relative aspect-video bg-gray-900 border border-gray-700 rounded-xl overflow-hidden">
-                <div className="absolute inset-0 flex items-center justify-center text-gray-600">
-                  <div className="text-center">
-                    <Camera className="w-12 h-12 mx-auto mb-4 text-gray-700" />
-                    <p className="text-gray-600">3D Character Builder Preview</p>
-                  </div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <img 
+                    src={preview} 
+                    alt="Character Builder Preview" 
+                    className="w-full h-full object-contain"
+                  />
                 </div>
-                {/* UI elements */}
+                
+                {/* UI elements overlay */}
                 <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/80 to-transparent"></div>
                 <div className="absolute top-4 left-4 right-4 flex justify-between">
                   <div className="bg-black/50 border border-gray-700 rounded-full px-3 py-1 text-xs text-gray-300">Facial Sculpting Mode</div>
