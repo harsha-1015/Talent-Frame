@@ -2,13 +2,68 @@ from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 import json
 import logging
 import base64
 import uuid
-from .models import User, ActorProfile, FilmmakerProfile
+from .models import User, ActorProfile, FilmmakerProfile, AvatarStore
+from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
+
+
+# Set up logging
+logger = logging.getLogger(__name__)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_avatar_by_uid(request, uid):
+    """
+    Get avatar URL for a specific user by their UID.
+    It first checks AvatarStore, then falls back to the user's profile picture.
+    """
+    logger.info(f"Attempting to fetch avatar for UID: {uid}")
+
+    # 1. Try to get the avatar from AvatarStore first
+    try:
+        avatar = AvatarStore.objects.get(uid=uid)
+        logger.info(f"Found avatar in AvatarStore for UID: {uid}")
+        return Response({'avatarUrl': avatar.avatarUrl}, status=status.HTTP_200_OK)
+    except AvatarStore.DoesNotExist:
+        logger.info(f"No avatar in AvatarStore for UID: {uid}. Checking user profile.")
+    except Exception as e:
+        logger.error(f"Error fetching from AvatarStore for UID {uid}: {e}", exc_info=True)
+        # Continue to check profile, as this is a fallback mechanism
+
+    # 2. If not in AvatarStore, check the user's profile
+    try:
+        user = User.objects.get(uid=uid)
+        profile = None
+
+        if hasattr(user, 'filmmakerprofile'):
+            profile = user.filmmakerprofile
+            logger.info(f"Found FilmmakerProfile for UID: {uid}")
+        elif hasattr(user, 'actorprofile'):
+            profile = user.actorprofile
+            logger.info(f"Found ActorProfile for UID: {uid}")
+
+        if profile and hasattr(profile, 'profile_picture') and profile.profile_picture:
+            logger.info(f"Found profile picture for UID: {uid}. URL: {profile.profile_picture.url}")
+            return Response({'avatarUrl': profile.profile_picture.url}, status=status.HTTP_200_OK)
+        else:
+            logger.warning(f"No profile or profile picture found for user {uid}. This may be expected.")
+            return Response({'message': 'No avatar found for this user.'}, status=status.HTTP_404_NOT_FOUND)
+
+    except User.DoesNotExist:
+        logger.error(f"User with UID {uid} not found in the database.")
+        return Response({'message': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    except Exception as e:
+        logger.error(f"An unexpected error occurred fetching profile avatar for UID {uid}: {e}", exc_info=True)
+        return Response({'message': 'An internal server error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -479,3 +534,69 @@ def handle_profile(request, uid):
         except Exception as e:
             logger.error(f"Error updating profile: {str(e)}", exc_info=True)
             return JsonResponse({'error': f'Error updating profile: {str(e)}'}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def store_avatar(request):
+    try:
+        logger.info("Store Avatar Endpoint Hit")
+        
+        # Parse the request body
+        try:
+            data = json.loads(request.body)
+            logger.info(f"Parsed JSON data for avatar storage: {data}")
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON Decode Error: {e}")
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+        
+        # Extract avatar data
+        uid = data.get('uid')
+        avatar_id = data.get('avatarId')
+        avatar_url = data.get('avatarUrl')
+        
+        # Validate required fields
+        if not all([uid, avatar_id, avatar_url]):
+            logger.error("Missing required fields for avatar storage")
+            return JsonResponse(
+                {'error': 'Missing required fields (uid, avatarId, avatarUrl)'}, 
+                status=400
+            )
+        
+        try:
+            # Check if avatar already exists for this user
+            avatar, created = AvatarStore.objects.update_or_create(
+                uid=uid,
+                defaults={
+                    'avatarId': avatar_id,
+                    'avatarUrl': avatar_url
+                }
+            )
+            
+            logger.info(f"Avatar {'created' if created else 'updated'} successfully for user {uid}")
+            
+            return JsonResponse({
+                'message': 'Avatar stored successfully',
+                'data': {
+                    'uid': avatar.uid,
+                    'avatarId': avatar.avatarId,
+                    'avatarUrl': avatar.avatarUrl,
+                    'created_at': avatar.created_at.isoformat(),
+                    'updated_at': avatar.updated_at.isoformat()
+                },
+                'is_new': created
+            }, status=201 if created else 200)
+            
+        except Exception as e:
+            logger.error(f"Error storing avatar: {str(e)}", exc_info=True)
+            return JsonResponse(
+                {'error': f'Failed to store avatar: {str(e)}'}, 
+                status=500
+            )
+            
+    except Exception as e:
+        logger.error(f"Unexpected error in store_avatar: {str(e)}", exc_info=True)
+        return JsonResponse(
+            {'error': 'An unexpected error occurred'}, 
+            status=500
+        )
