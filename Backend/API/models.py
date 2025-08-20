@@ -52,3 +52,19 @@ class ActorProfile(models.Model):
 
     def __str__(self):
         return f"Actor Profile - {self.user.username}"
+
+
+class AvatarStore(models.Model):
+    uid = models.CharField(max_length=128, primary_key=True)  # Firebase UID
+    avatarId = models.CharField(max_length=255, unique=True)
+    avatarUrl = models.URLField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Avatar Store'
+        verbose_name_plural = 'Avatar Store'
+
+    def __str__(self):
+        return f"Avatar for {self.uid}"

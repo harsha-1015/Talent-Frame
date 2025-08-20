@@ -11,6 +11,7 @@ import Match from "./pages/Match.jsx";
 import Connections from "./pages/Connections.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
+import AvatarViewer from "./components/AvatarViewer.jsx";
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
@@ -73,6 +74,14 @@ const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <Connections />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "/avatar/:uid",
+        element: (
+          <ProtectedRoute>
+            <AvatarViewer />
           </ProtectedRoute>
         ),
       },
