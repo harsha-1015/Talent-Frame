@@ -13,6 +13,11 @@ from .models import User, ActorProfile, FilmmakerProfile, AvatarStore
 from rest_framework import status
 from django.db import transaction
 from django.utils import timezone
+import cv2
+import numpy as np
+import requests
+from deepface import DeepFace
+from scipy.spatial.distance import cosine
 
 
 # Set up logging
@@ -600,3 +605,105 @@ def store_avatar(request):
             {'error': 'An unexpected error occurred'}, 
             status=500
         )
+
+@api_view(['POST'])
+def match_avatar_to_actors(request):
+    """
+    Matches an avatar face to a gallery of actor faces.
+    Expects a POST request with 'avatar_url' in the JSON body.
+    """
+    logger.info("Avatar to actor matching process started.")
+
+    try:
+        try:
+            data = json.loads(request.body)
+            avatar_url = data.get('avatar_url')
+        except json.JSONDecodeError:
+            logger.error("Invalid JSON format in request body.")
+            return Response({'error': 'Invalid JSON format.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not avatar_url:
+            logger.error("Missing 'avatar_url' in request body.")
+            return Response({'error': "Missing 'avatar_url' in request body."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # --- 1. Face Detection and Cropping Helper ---
+        def get_face_from_url(image_url):
+            try:
+                response = requests.get(image_url, timeout=15)
+                response.raise_for_status()
+                image_array = np.frombuffer(response.content, np.uint8)
+                img = cv2.imdecode(image_array, cv2.IMREAD_COLOR)
+                
+                # Use DeepFace's built-in function which detects and returns a cropped face
+                # The returned image is a numpy array, ready for embedding
+                detected_face = DeepFace.detectFace(img, detector_backend='opencv', enforce_detection=True)
+                return detected_face
+
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Failed to download image from {image_url}: {e}")
+            except Exception as e:
+                # This will catch DeepFace's exception if no face is found or other errors
+                logger.warning(f"No face detected or error processing image from {image_url}: {e}")
+            return None
+
+        avatar_face_img = get_face_from_url(avatar_url)
+        if avatar_face_img is None:
+            return Response({'error': 'Could not detect a face in the provided avatar image.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # --- 2. Fetch Actors and Extract Their Faces ---
+        actors = ActorProfile.objects.select_related('user').all()
+        actor_faces = []
+        for actor in actors:
+            if actor.profile_picture:
+                actor_face_img = get_face_from_url(actor.profile_picture)
+                if actor_face_img is not None:
+                    actor_faces.append({
+                        'actor_id': str(actor.actor_id),
+                        'actor_name': actor.user.username,
+                        'face_img': actor_face_img,
+                        'profile_pic_url': actor.profile_picture
+                    })
+
+        if not actor_faces:
+            return Response({'error': 'No actor faces could be processed from the database.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # --- 3. Generate Embeddings ---
+        try:
+            # Use 'VGG-Face' model as it is a good balance of speed and accuracy
+            model_name = 'VGG-Face'
+            avatar_embedding = DeepFace.represent(avatar_face_img, model_name=model_name, enforce_detection=False)[0]["embedding"]
+            
+            for item in actor_faces:
+                item['embedding'] = DeepFace.represent(item['face_img'], model_name=model_name, enforce_detection=False)[0]["embedding"]
+
+        except Exception as e:
+            logger.error(f"Error generating face embeddings: {e}", exc_info=True)
+            return Response({'error': 'Failed to generate face embeddings.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # --- 4. Compare Embeddings and Rank ---
+        matches = []
+        for item in actor_faces:
+            distance = cosine(avatar_embedding, item['embedding'])
+            similarity = 1 - distance  # Cosine similarity
+            matches.append({
+                'actor_id': item['actor_id'],
+                'actor_name': item['actor_name'],
+                'similarity_score': round(similarity, 4),
+                'actor_face_crop': item['profile_pic_url'] # For now, returning the original URL
+            })
+
+        # Sort by highest similarity
+        ranked_matches = sorted(matches, key=lambda x: x['similarity_score'], reverse=True)
+
+        # --- 5. Return Response ---
+        response_data = {
+            'avatar_url': avatar_url,
+            'matches': ranked_matches[:10]  # Return top 10 matches
+        }
+
+        logger.info(f"Successfully matched avatar. Found {len(ranked_matches)} potential matches.")
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.error(f"An unexpected error occurred in match_avatar_to_actors: {e}", exc_info=True)
+        return Response({'error': 'An internal server error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
